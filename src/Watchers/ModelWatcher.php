@@ -2,6 +2,7 @@
 
 namespace Laravel\Telescope\Watchers;
 
+use Illuminate\Log\Log;
 use Illuminate\Support\Str;
 use Laravel\Telescope\FormatModel;
 use Laravel\Telescope\IncomingEntry;
@@ -20,7 +21,7 @@ class ModelWatcher extends Watcher
     /**
      * Register the watcher.
      *
-     * @param  \Illuminate\Contracts\Foundation\Application  $app
+     * @param \Illuminate\Contracts\Foundation\Application $app
      * @return void
      */
     public function register($app)
@@ -35,13 +36,13 @@ class ModelWatcher extends Watcher
     /**
      * Record an action.
      *
-     * @param  string  $event
-     * @param  array  $data
+     * @param string $event
+     * @param array $data
      * @return void
      */
     public function recordAction($event, $data)
     {
-        if (! Telescope::isRecording() || ! $this->shouldRecord($event)) {
+        if (!Telescope::isRecording() || !$this->shouldRecord($event)) {
             return;
         }
 
@@ -65,17 +66,17 @@ class ModelWatcher extends Watcher
     /**
      * Record model hydrations.
      *
-     * @param  array  $data
+     * @param array $data
      * @return void
      */
     public function recordHydrations($data)
     {
-        if (! ($this->options['hydrations'] ?? false)
-            || ! $this->shouldRecordHydration($modelClass = get_class($data[0]))) {
+        if (!($this->options['hydrations'] ?? false)
+            || !$this->shouldRecordHydration($modelClass = get_class($data[0]))) {
             return;
         }
 
-        if (! isset($this->hydrationEntries[$modelClass])) {
+        if (!isset($this->hydrationEntries[$modelClass])) {
             $this->hydrationEntries[$modelClass] = IncomingEntry::make([
                 'action' => 'retrieved',
                 'model' => $modelClass,
@@ -84,7 +85,17 @@ class ModelWatcher extends Watcher
 
             Telescope::recordModelEvent($this->hydrationEntries[$modelClass]);
         } else {
-            $this->hydrationEntries[$modelClass]->content['count']++;
+            try {
+                $this->hydrationEntries[$modelClass]->content['count']++;
+            } catch (\Exception $e) {
+                Log::warn(
+                    $e->getMessage(),
+                    [
+                        'exception' => $e,
+                        'modelClass' => $modelClass,
+                        'entries' => $this->hydrationEntries,
+                    ]);
+            }
         }
     }
 
@@ -101,7 +112,7 @@ class ModelWatcher extends Watcher
     /**
      * Extract the Eloquent action from the given event.
      *
-     * @param  string  $event
+     * @param string $event
      * @return mixed
      */
     private function action($event)
@@ -114,7 +125,7 @@ class ModelWatcher extends Watcher
     /**
      * Determine if the Eloquent event should be recorded.
      *
-     * @param  string  $eventName
+     * @param string $eventName
      * @return bool
      */
     private function shouldRecord($eventName)
@@ -127,14 +138,14 @@ class ModelWatcher extends Watcher
     /**
      * Determine if the hydration should be recorded for the model class.
      *
-     * @param  string  $modelClass
+     * @param string $modelClass
      * @return bool
      */
     private function shouldRecordHydration($modelClass)
     {
         return collect($this->options['ignore'] ?? [EntryModel::class])
             ->every(function ($class) use ($modelClass) {
-                return $modelClass !== $class && ! is_subclass_of($modelClass, $class);
+                return $modelClass !== $class && !is_subclass_of($modelClass, $class);
             });
     }
 }
